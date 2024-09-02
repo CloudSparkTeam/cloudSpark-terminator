@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+ultralytics
+torch
+torchvision
+torchaudio
+roboflow
+Pillow
