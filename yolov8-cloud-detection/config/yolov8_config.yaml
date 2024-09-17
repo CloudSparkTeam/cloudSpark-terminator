@@ -1,0 +1,11 @@
+# config/yolov8_config.yaml
+
+# Substitua o caminho base por "" (string vazia) para usar caminhos absolutos diretamente
+path: ""  
+
+# Caminhos absolutos para os conjuntos de dados de treino e validação
+train: C:/Users/Fatec/Documents/GitHub/cloudSpark-terminator/yolov8-cloud-detection/data/processed/train/images
+val: C:/Users/Fatec/Documents/GitHub/cloudSpark-terminator/yolov8-cloud-detection/data/processed/valid/images
+
+nc: 1                    # Número de classes (ex: nuvens)
+names: ['cloud']         # Nome da classe
