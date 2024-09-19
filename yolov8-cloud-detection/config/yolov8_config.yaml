@@ -1,11 +1,12 @@
 # config/yolov8_config.yaml
 
-# Substitua o caminho base por "" (string vazia) para usar caminhos absolutos diretamente
-path: ""  
+# Caminho base para os dados (relativo ao diretório onde o script é executado)
+path: data/processed  # Diretório base para os dados de treino e validação
 
-# Caminhos absolutos para os conjuntos de dados de treino e validação
-train: C:/Users/Fatec/Documents/GitHub/cloudSpark-terminator/yolov8-cloud-detection/data/processed/train/images
-val: C:/Users/Fatec/Documents/GitHub/cloudSpark-terminator/yolov8-cloud-detection/data/processed/valid/images
+# Caminhos relativos para os conjuntos de dados de treino e validação
+train: train/images      # Subdiretório relativo para imagens de treino
+val: valid/images        # Subdiretório relativo para imagens de validação
 
-nc: 1                    # Número de classes (ex: nuvens)
-names: ['cloud']         # Nome da classe
+# Configurações de classes
+nc: 1                    # Número de classes (nuvens)
+names: ['cloud']          # Nome da classe
