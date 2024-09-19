@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+ultralytics==8.0.196
+torch
+torchvision
+torchaudio
+roboflow
+Pillow
+ipykernel
