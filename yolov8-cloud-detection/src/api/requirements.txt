@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-ultralytics==8.0.196
+ultralytics
 torch
 torchvision
 torchaudio

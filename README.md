@@ -22,3 +22,4 @@ Este projeto utiliza o YOLOv8 para detectar nuvens em imagens de satélite. A es
 1. Instale as dependências:
    ```bash
    pip install -r src/api/requirements.txt
+   ```

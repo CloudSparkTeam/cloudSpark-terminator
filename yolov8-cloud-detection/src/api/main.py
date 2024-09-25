@@ -12,7 +12,7 @@ from typing import List
 app = FastAPI()
 
 # Carregar o modelo treinado
-model = YOLO('runs/train/cloud-detection3/weights/best.pt')
+model = YOLO('runs/train/cloud-detection/weights/best.pt')
 
 # Pasta temporária para salvar imagens processadas
 TEMP_DIR = "temp_images"
