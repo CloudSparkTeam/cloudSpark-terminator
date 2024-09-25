@@ -7,3 +7,5 @@ torchaudio
 roboflow
 Pillow
 ipykernel
+python-multipart
+tifffile
