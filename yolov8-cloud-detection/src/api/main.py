@@ -1,11 +1,9 @@
 import tifffile as tiff
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from ultralytics import YOLO
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from PIL import Image, ImageDraw
 import io
-import os
-import uuid
 import numpy as np
 from typing import List
 
@@ -14,16 +12,12 @@ app = FastAPI()
 # Carregar o modelo treinado
 model = YOLO('runs/train/cloud-detection/weights/best.pt')
 
-# Pasta temporária para salvar imagens processadas
-TEMP_DIR = "temp_images"
-os.makedirs(TEMP_DIR, exist_ok=True)
-
 # Tamanho da imagem que foi utilizado no treinamento
 TARGET_IMG_SIZE = 640  # 640x640
 
 @app.post("/predict/")
 async def predict_images(files: List[UploadFile] = File(...)):
-    processed_images = []
+    results_list = []
 
     for file in files:
         # Se for um arquivo .tif
@@ -66,18 +60,17 @@ async def predict_images(files: List[UploadFile] = File(...)):
         for box in results[0].boxes.xyxy.tolist():
             draw.rectangle(box, outline="red", width=3)
 
-        # Gerar um nome de arquivo único para salvar a imagem processada
-        output_filename = f"{uuid.uuid4()}.png"
-        output_path = os.path.join(TEMP_DIR, output_filename)
+        # Converter a imagem processada para um objeto de bytes
+        img_byte_arr = io.BytesIO()
+        image_pil.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
 
-        # Salvar a imagem com as detecções
-        image_pil.save(output_path)
-        processed_images.append(output_path)
+        # Adicionar o resultado no formato de bytes
+        results_list.append(img_byte_arr)
 
-    # Retornar as imagens processadas
-    if len(processed_images) == 1:
-        # Retorna uma única imagem
-        return FileResponse(processed_images[0], media_type="image/png", filename=processed_images[0])
+    # Se houver apenas uma imagem, retornar diretamente
+    if len(results_list) == 1:
+        return StreamingResponse(results_list[0], media_type="image/png")
+    # Se houver múltiplas imagens, retorná-las como uma lista de responses
     else:
-        # Retorna múltiplas imagens
-        return [FileResponse(image_path, media_type="image/png", filename=os.path.basename(image_path)) for image_path in processed_images]
+        return [StreamingResponse(img, media_type="image/png") for img in results_list]
