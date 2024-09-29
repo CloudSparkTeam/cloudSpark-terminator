@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+ultralytics
+torch
+torchvision
+torchaudio
+roboflow
+Pillow
+ipykernel
+python-multipart
+tifffile

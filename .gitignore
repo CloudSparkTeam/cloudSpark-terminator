@@ -1,0 +1,51 @@
+# Ignore arquivos temporários de sistema
+.DS_Store
+Thumbs.db
+
+# Ignore diretórios e arquivos de ambientes virtuais
+venv/
+yolov8_env/
+env/
+.venv/
+*.pyc
+__pycache__/
+*.pyo
+
+# Ignore dependências instaladas
+src/api/requirements.txt
+
+# Ignore pastas de dados brutos e gerados
+data/
+
+# Ignore arquivos de checkpoints e logs de treinamento
+logs/
+experiments/
+# runs/
+
+# Ignore arquivos gerados por notebooks
+notebooks/.ipynb_checkpoints/
+notebooks/*.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Ignore arquivos de cache do Jupyter
+.ipynb_checkpoints/
+
+# Ignore diretórios de cache
+__pycache__/
+.cache/
+*.egg-info/
+
+# Ignore arquivos e diretórios de configuração de IDEs
+.vscode/
+.idea/
+*.iml
+
+# Ignore arquivos de log e outros arquivos temporários
+*.log
+*.temp
+*.tmp
+*.bak
+*.swp
+
+# Ignore arquivos de exportação do Roboflow
+*.zip
