@@ -17,14 +17,10 @@ src/api/requirements.txt
 # Ignore pastas de dados brutos e gerados
 data/
 
-# Ignore pesos de modelos treinados
-weights/
-*.pt
-
 # Ignore arquivos de checkpoints e logs de treinamento
 logs/
 experiments/
-runs/
+# runs/
 
 # Ignore arquivos gerados por notebooks
 notebooks/.ipynb_checkpoints/

@@ -1,9 +1,11 @@
 fastapi
 uvicorn
-ultralytics==8.0.196
+ultralytics
 torch
 torchvision
 torchaudio
 roboflow
 Pillow
 ipykernel
+python-multipart
+tifffile
