@@ -1,76 +1,88 @@
-import tifffile as tiff
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from ultralytics import YOLO
-from fastapi.responses import StreamingResponse
-from PIL import Image, ImageDraw
+from flask import Flask, request, jsonify, send_file
+import torch
+import torchvision.transforms as transforms
+from PIL import Image
+import torch.nn as nn
 import io
-import numpy as np
-from typing import List
+import os
 
-app = FastAPI()
-
-# Carregar o modelo treinado
-model = YOLO('runs/train/cloud-detection/weights/best.pt')
-
-# Tamanho da imagem que foi utilizado no treinamento
-TARGET_IMG_SIZE = 640  # 640x640
-
-@app.post("/predict/")
-async def predict_images(files: List[UploadFile] = File(...)):
-    results_list = []
-
-    for file in files:
-        # Se for um arquivo .tif
-        if file.filename.endswith(".tif"):
-            # Ler a imagem TIFF usando tifffile
-            tiff_image = tiff.imread(io.BytesIO(await file.read()))
-
-            # Exibir as propriedades da imagem para diagnóstico
-            print(f"Dimensões da Imagem: {tiff_image.shape}")
-            print(f"Tipo de dados: {tiff_image.dtype}")
-
-            # Se a imagem tiver múltiplas bandas, converter para RGB
-            if tiff_image.ndim == 3:
-                image_rgb = np.stack([tiff_image[:, :, 0], tiff_image[:, :, 1], tiff_image[:, :, 2]], axis=-1)
-            elif tiff_image.ndim == 2:
-                # Se for uma imagem de banda única (exemplo: BAND5), replicar para formar RGB
-                image_rgb = np.stack([tiff_image, tiff_image, tiff_image], axis=-1)  # Replicar a banda para RGB
-            else:
-                raise HTTPException(status_code=400, detail="Formato da imagem não suportado ou imagem corrompida.")
-
-            # Converter para imagem PIL
-            image_pil = Image.fromarray(image_rgb)
-
-        # Se for um arquivo .png
-        else:
-            # Ler a imagem PNG usando PIL
-            image_pil = Image.open(io.BytesIO(await file.read()))
-            # Se a imagem não for RGB, converter
-            if image_pil.mode != 'RGB':
-                image_pil = image_pil.convert('RGB')
-
-        # Redimensionar a imagem para o tamanho utilizado no treinamento (640x640)
-        image_pil = image_pil.resize((TARGET_IMG_SIZE, TARGET_IMG_SIZE))
-
-        # Fazer a inferência usando o YOLOv8
-        results = model.predict(image_pil, conf=0.5, iou=0.4)
+# Definindo o modelo UNet
+class UNet(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(UNet, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
         
-        # Marcar as caixas de detecção diretamente na imagem
-        draw = ImageDraw.Draw(image_pil)
-        for box in results[0].boxes.xyxy.tolist():
-            draw.rectangle(box, outline="red", width=3)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(64, out_channels, kernel_size=2, stride=2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=1),
+        )
 
-        # Converter a imagem processada para um objeto de bytes
-        img_byte_arr = io.BytesIO()
-        image_pil.save(img_byte_arr, format='PNG')
-        img_byte_arr.seek(0)
+    def forward(self, x):
+        x1 = self.encoder(x)
+        x2 = self.decoder(x1)
+        return x2
 
-        # Adicionar o resultado no formato de bytes
-        results_list.append(img_byte_arr)
+# Inicializando a aplicação Flask
+app = Flask(__name__)
 
-    # Se houver apenas uma imagem, retornar diretamente
-    if len(results_list) == 1:
-        return StreamingResponse(results_list[0], media_type="image/png")
-    # Se houver múltiplas imagens, retorná-las como uma lista de responses
-    else:
-        return [StreamingResponse(img, media_type="image/png") for img in results_list]
+# Caminho para o modelo UNet
+model_path = os.path.join('yolov8-cloud-detection', 'notebooks', 'unet_model.pth')
+
+# Carregando o modelo
+model = UNet(in_channels=3, out_channels=1)
+model.load_state_dict(torch.load(model_path))
+model.eval()
+
+# Definindo transformações para a entrada
+transform = transforms.Compose([
+    transforms.Resize((256, 256)),
+    transforms.ToTensor(),
+])
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    if 'files' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+
+    file = request.files['files']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    # Processar a imagem
+    input_image = Image.open(file).convert('RGB')
+    original_size = input_image.size
+    image = transform(input_image).unsqueeze(0)  # Adicionar uma dimensão de batch
+
+    with torch.no_grad():
+        output = model(image)
+
+    # Converter a saída para uma imagem
+    output_image = output.squeeze().numpy()  # Remover a dimensão do batch
+    output_image = (output_image * 255).astype('uint8')  # Converter para 8 bits
+
+    # Redimensionar a saída para o tamanho original da entrada
+    mask_image = Image.fromarray(output_image).resize(original_size, Image.LANCZOS).convert('RGBA')
+
+    # Converter a imagem original para RGBA
+    input_image = input_image.convert('RGBA')
+
+    # Mesclar as duas imagens com um nível de transparência (0.5 é 50%)
+    blended = Image.blend(input_image, mask_image, alpha=0.5)
+
+    # Salvar a imagem resultante em um buffer em memória
+    img_io = io.BytesIO()
+    blended.save(img_io, 'PNG')
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/png', as_attachment=False, download_name='blended_output.png')
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, debug=True)
+

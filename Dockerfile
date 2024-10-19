@@ -1,21 +1,19 @@
-# Usa uma imagem base de Python slim para manter o contêiner leve
-FROM python:3.9-slim
+# Use uma imagem base do Python com suporte ao PyTorch
+FROM python:3.9
 
-# Define o diretório de trabalho dentro do contêiner
+# Defina o diretório de trabalho no container
 WORKDIR /app
 
-# Copia o arquivo de dependências para dentro do contêiner
-COPY yolov8-cloud-detection/src/api/requirements.txt .
+# Copie os arquivos necessários para a aplicação
+COPY yolov8-cloud-detection/src/api/main.py ./
+COPY yolov8-cloud-detection/src/api/requirements.txt ./
+COPY yolov8-cloud-detection/notebooks/model_training_Unet.ipynb ./unet_model.pth
 
-# Instala as dependências necessárias
+# Instale as dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o script principal e o modelo para dentro do contêiner
-COPY yolov8-cloud-detection/src/api/main.py .
-COPY yolov8-cloud-detection/runs/train/cloud-detection/weights/best.pt ./weights/
-
-# Expõe a porta 8000 para acessar o FastAPI
+# Exponha a porta em que o Flask irá rodar
 EXPOSE 8000
 
-# Comando que será rodado quando o contêiner iniciar
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando para iniciar a aplicação Flask
+CMD ["python", "main.py"]
