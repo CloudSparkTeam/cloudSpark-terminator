@@ -5,9 +5,9 @@ FROM python:3.9
 WORKDIR /app
 
 # Copie os arquivos necessários para a aplicação
-COPY main.py .
-COPY unet_model.pth .
-COPY requirements.txt .
+COPY yolov8-cloud-detection/src/api/main.py ./
+COPY yolov8-cloud-detection/src/api/requirements.txt ./
+COPY yolov8-cloud-detection/notebooks/model_training_Unet.ipynb ./unet_model.pth
 
 # Instale as dependências
 RUN pip install --no-cache-dir -r requirements.txt

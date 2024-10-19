@@ -4,6 +4,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 import torch.nn as nn
 import io
+import os
 
 # Definindo o modelo UNet
 class UNet(nn.Module):
@@ -31,9 +32,12 @@ class UNet(nn.Module):
 # Inicializando a aplicação Flask
 app = Flask(__name__)
 
+# Caminho para o modelo UNet
+model_path = os.path.join('yolov8-cloud-detection', 'notebooks', 'unet_model.pth')
+
 # Carregando o modelo
 model = UNet(in_channels=3, out_channels=1)
-model.load_state_dict(torch.load('unet_model.pth'))
+model.load_state_dict(torch.load(model_path))
 model.eval()
 
 # Definindo transformações para a entrada
