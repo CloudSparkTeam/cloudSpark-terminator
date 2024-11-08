@@ -1,88 +1,68 @@
 from flask import Flask, request, jsonify, send_file
-import torch
-import torchvision.transforms as transforms
-from PIL import Image
-import torch.nn as nn
-import io
+import pyproj
+import numpy as np
+import tifffile as tiff  # Para ler arquivos TIFF
+import torch  # Para carregar o modelo PyTorch
 import os
+import tempfile
 
-# Definindo o modelo UNet
-class UNet(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(UNet, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2)
-        )
-        
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(64, out_channels, kernel_size=2, stride=2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=1),
-        )
-
-    def forward(self, x):
-        x1 = self.encoder(x)
-        x2 = self.decoder(x1)
-        return x2
-
-# Inicializando a aplicação Flask
 app = Flask(__name__)
 
-# Caminho para o modelo UNet
-model_path = os.path.join('yolov8-cloud-detection', 'notebooks', 'unet_model.pth')
-
-# Carregando o modelo
-model = UNet(in_channels=3, out_channels=1)
-model.load_state_dict(torch.load(model_path))
-model.eval()
-
-# Definindo transformações para a entrada
-transform = transforms.Compose([
-    transforms.Resize((256, 256)),
-    transforms.ToTensor(),
-])
+# Carrega o modelo
+model = torch.load("best_model.pth")
+model.eval()  # Define o modelo para o modo de avaliação
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'files' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+    # Verifica se o arquivo foi enviado
+    if 'file' not in request.files:
+        return jsonify({'error': 'Nenhum arquivo fornecido.'}), 400
 
-    file = request.files['files']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    file = request.files['file']
 
-    # Processar a imagem
-    input_image = Image.open(file).convert('RGB')
-    original_size = input_image.size
-    image = transform(input_image).unsqueeze(0)  # Adicionar uma dimensão de batch
+    # Verifica se o arquivo é um TIFF
+    if not file.filename.endswith('.tiff') and not file.filename.endswith('.tif'):
+        return jsonify({'error': 'Arquivo não é um TIFF.'}), 400
 
-    with torch.no_grad():
-        output = model(image)
+    # Salva o arquivo temporariamente
+    temp_path = tempfile.mktemp(suffix='.tif')
+    file.save(temp_path)
 
-    # Converter a saída para uma imagem
-    output_image = output.squeeze().numpy()  # Remover a dimensão do batch
-    output_image = (output_image * 255).astype('uint8')  # Converter para 8 bits
+    try:
+        # Carrega a imagem TIFF
+        with tiff.TiffFile(temp_path) as tif_file:
+            image_data = tif_file.asarray()  # Obtém os dados da imagem
+            
+            # Processa a imagem usando o modelo
+            input_tensor = preprocess_image(image_data)  # Função de pré-processamento que você precisa definir
+            with torch.no_grad():
+                output_tensor = model(input_tensor)  # Faz a previsão
 
-    # Redimensionar a saída para o tamanho original da entrada
-    mask_image = Image.fromarray(output_image).resize(original_size, Image.LANCZOS).convert('RGBA')
+            # Converte a saída para um formato adequado (por exemplo, numpy array)
+            output_array = output_tensor.numpy()  # Ou outro método para converter conforme necessário
+            
+            # Salva o resultado como GeoTIFF
+            output_path = tempfile.mktemp(suffix='.tif')
+            tiff.imsave(output_path, output_array)
 
-    # Converter a imagem original para RGBA
-    input_image = input_image.convert('RGBA')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        # Remove o arquivo temporário
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
-    # Mesclar as duas imagens com um nível de transparência (0.5 é 50%)
-    blended = Image.blend(input_image, mask_image, alpha=0.5)
+    return send_file(output_path, mimetype='image/tiff'), 200  # Envia o GeoTIFF como resposta
 
-    # Salvar a imagem resultante em um buffer em memória
-    img_io = io.BytesIO()
-    blended.save(img_io, 'PNG')
-    img_io.seek(0)
+def preprocess_image(image_data):
+    # Implemente aqui a função para pré-processar a imagem conforme necessário para o seu modelo
+    # Isso pode incluir redimensionamento, normalização, etc.
+    # Exemplo (ajuste conforme necessário):
+    image_data = image_data / 255.0  # Normalização
+    image_data = np.transpose(image_data, (2, 0, 1))  # Transpor para C x H x W
+    input_tensor = torch.tensor(image_data, dtype=torch.float32).unsqueeze(0)  # Adiciona a dimensão do batch
+    return input_tensor
 
-    return send_file(img_io, mimetype='image/png', as_attachment=False, download_name='blended_output.png')
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
-
+if __name__ == '__main__':
+    # Configurando para rodar em qualquer IP na porta 8000
+    app.run(host='0.0.0.0', port=8000)
