@@ -1,124 +1,108 @@
 
-# API de Segmentação de Nuvens
+# API para Segmentação de Nuvens em Imagens TIFF
 
-Esta API fornece uma funcionalidade para segmentação de nuvens em imagens utilizando um modelo treinado U-Net. Ela recebe imagens, realiza a segmentação e retorna os resultados como arquivos GeoTIFF ou PNG.
+Esta API realiza a segmentação de nuvens em imagens TIFF grandes, usando um modelo de deep learning pré-treinado com a arquitetura U-Net. Ela processa uma imagem de satélite TIFF, aplica filtros de contraste, gera uma máscara de segmentação e devolve a imagem final em formato TIFF com a máscara sobreposta.
 
-## Endpoints
+## Pré-requisitos
 
-### 1. `/predict` - Segmentação de Imagens
+Para executar o projeto, você precisa de:
 
-Realiza a segmentação de uma ou mais imagens enviadas, retornando os resultados como arquivos GeoTIFF compactados em um arquivo ZIP.
+- **Python 3.7+**
+- **Bibliotecas**: 
+    - `torch`
+    - `torchvision`
+    - `Pillow`
+    - `Flask`
+    - `numpy`
 
-#### Método HTTP
-`POST`
+## Instalação
 
-#### Parâmetros de Requisição
-
-- **files**: Um ou mais arquivos de imagem. As imagens devem ter 4 canais (RGB + NIR).
-  
-  **Tipo**: Arquivo (pode enviar múltiplos arquivos)
-
-#### Exemplo de Requisição
-
-```bash
-curl -X POST "http://127.0.0.1:8000/predict" -F "files=@/caminho/para/imagem1.png" -F "files=@/caminho/para/imagem2.png"
-```
-
-#### Resposta
-
-- **200 OK**: Retorna um arquivo ZIP contendo os arquivos GeoTIFF gerados.
-- **400 Bad Request**: Caso não haja arquivos na requisição.
-- **500 Internal Server Error**: Caso ocorra um erro ao processar a imagem.
-
-**Exemplo de Resposta (200 OK)**
-
-O arquivo ZIP será retornado com o nome `segmented_images.zip`, contendo os arquivos GeoTIFF gerados pela segmentação.
-
----
-
-### 2. `/convert_to_images` - Converter GeoTIFF para PNG
-
-Este endpoint converte arquivos GeoTIFF enviados em um arquivo ZIP para imagens PNG. O arquivo ZIP de saída será retornado.
-
-#### Método HTTP
-`POST`
-
-#### Parâmetros de Requisição
-
-- **file**: Um arquivo ZIP contendo arquivos GeoTIFF.
-  
-  **Tipo**: Arquivo (um arquivo ZIP contendo GeoTIFFs)
-
-#### Exemplo de Requisição
-
-```bash
-curl -X POST "http://127.0.0.1:8000/convert_to_images" -F "file=@/caminho/para/arquivo.zip"
-```
-
-#### Resposta
-
-- **200 OK**: Retorna um arquivo ZIP contendo os arquivos PNG convertidos.
-- **400 Bad Request**: Caso não haja arquivos na requisição ou o arquivo enviado não seja um ZIP.
-- **500 Internal Server Error**: Caso ocorra um erro ao processar o arquivo.
-
-**Exemplo de Resposta (200 OK)**
-
-O arquivo ZIP será retornado com o nome `converted_images.zip`, contendo as imagens PNG convertidas a partir dos arquivos GeoTIFF.
-
----
-
-## Detalhes de Implementação
-
-### Dependências
-
-Esta API foi construída com os seguintes pacotes:
-
-- **Torch:** Para inferência do modelo U-Net.
-- **Flask:** Framework para criação da API.
-- **GeoPandas:** Para manipulação e exportação de arquivos GeoTIFF.
-- **Shapely:** Para operações geométricas.
-
-### Como rodar a API localmente
-
-1. Clone o repositório e crie um ambiente virtual:
+1. Clone o repositório:
     ```bash
-    git clone <URL do repositório>
-    cd <diretório do projeto>
-    python -m venv venv
+    git clone https://github.com/seu-repositorio.git
+    cd seu-repositorio/cloud-segmentation/src
     ```
 
-2. Ative o ambiente virtual:
-    - No Windows:
-      ```bash
-      .\venv\Scripts\Activate
-      ```
-    - No Linux/macOS:
-      ```bash
-      source venv/bin/activate
-      ```
-
-3. Instale as dependências:
+2. Crie um ambiente virtual e instale as dependências:
     ```bash
+    python -m venv venv
+    source venv/bin/activate  # No Windows: venv\Scripts\activate
     pip install -r requirements.txt
     ```
 
-4. Execute a API:
-    ```bash
-    python main.py
-    ```
+3. Certifique-se de que o modelo treinado `best_model.pth` está na mesma pasta que o código, pois ele será carregado para realizar a segmentação.
 
-A API será iniciada no `http://127.0.0.1:8000`.
+## Arquitetura U-Net
 
-### Testando a API
+A U-Net é uma rede neural convolucional voltada para segmentação de imagens. Esta versão utiliza o `resnet34` como base para as camadas de codificação, e a decodificação é feita com camadas de `ConvTranspose2d` para restaurar as dimensões da imagem original. A saída do modelo é uma máscara binária indicando as regiões de nuvens.
 
-Você pode testar a API usando o `curl`, Postman, ou qualquer outro cliente HTTP para enviar requisições `POST` com arquivos de imagem ou ZIP, conforme descrito acima.
+### Executando a API
 
-### Modelos
+1. **Clone o repositório** ou copie os arquivos do projeto para o seu ambiente.
+2. **Execute a API** com o comando:
+   ```bash
+   python main.py
+   ```
 
-A API usa um modelo de segmentação de nuvens baseado na arquitetura U-Net, treinado com dados de imagens contendo 4 canais: RGB e Near Infrared (NIR). O modelo é carregado e usado para fazer previsões de segmentação nas imagens enviadas.
+A API estará disponível em `http://0.0.0.0:8000`.
+
+## Endpoint `/predict`
+
+### Descrição
+
+Este endpoint recebe uma imagem TIFF, realiza a segmentação de nuvens e retorna a imagem final em TIFF com a máscara sobreposta.
+
+### Exemplo de Requisição
+
+- **Método**: `POST`
+- **Parâmetros**:
+    - `files`: Arquivo de imagem TIFF enviado via `multipart/form-data`.
+- **Resposta**: Imagem em formato PNG com a máscara de nuvens sobreposta.
+
+```bash
+curl -X POST -F "files=@path/to/your/image.tiff" http://0.0.0.0:8000/predict --output output_image.tiff
+```
+
+A resposta será a imagem TIFF sobreposta com a máscara de nuvens.
+
+### Passo a Passo de Processamento
+
+1. **Carregar Imagem e Aplicar Contraste**: A imagem TIFF é carregada e um aumento de contraste é aplicado para melhorar a visibilidade das nuvens.
+2. **Segmentação**: A imagem é convertida para tensor e passada pelo modelo U-Net, que gera uma máscara binária indicando as regiões de nuvens.
+3. **Sobreposição da Máscara**: A máscara gerada é sobreposta à imagem original para facilitar a visualização.
+4. **Retorno da Imagem**: A imagem final com a máscara sobreposta é enviada como resposta no formato PNG.
+
+## Organização de Funções Importantes
+
+- **overlay_mask_on_image**: Sobrepõe a máscara de segmentação na imagem original.
+- **segment_image**: Aplica o modelo U-Net para gerar a máscara de segmentação.
+- **load_and_apply_contrast**: Carrega a imagem TIFF e aplica um filtro de contraste.
+
+## Estrutura e Explicação do Código
+
+- `UNET`: Define a arquitetura U-Net baseada no ResNet34 para segmentação.
+- **Funções de Suporte**:
+  - `crop_tensor`: Função que ajusta dimensões de tensores para o U-Net.
+  - `predb_to_mask`: Converte a predição do modelo em uma máscara binária para segmentação.
+
+## Espaço para Imagens e Exemplos
+
+- **Exemplo de Input e Output**:
+  - Antes da Segmentação:
+    ![Input Image Example](/images/input_example.jpg)
+  - Após Segmentação e Aplicação da Máscara:
+    ![Output Image Example](images/output_example.jpg)
+
+## Considerações Finais
+
+Este projeto foi desenvolvido para facilitar o processamento e segmentação de nuvens em imagens de satélite em grande escala, oferecendo um ponto de partida para melhorias na detecção e análise de nuvens.
 
 ---
 
-## Licença
+**Instruções para Contribuição**:
+Sinta-se à vontade para enviar sugestões e melhorias para este projeto. 
 
-Esta API é fornecida sob a [Licença MIT](LICENSE), o que permite o uso, cópia, modificação e distribuição do software de acordo com as condições especificadas.
+---
+
+**Observações Adicionais**:
+Qualquer dúvida ou erro, entre em contato com o responsável pelo projeto.

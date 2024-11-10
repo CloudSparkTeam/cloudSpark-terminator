@@ -17,23 +17,16 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Função para sobrepor a máscara na imagem original
 def overlay_mask_on_image(original_path, mask_array, alpha=0.5):
-    # Carrega a imagem original e converte para RGBA
     original_image = Image.open(original_path).convert("RGBA")
-    
-    # Redimensiona a máscara para ter o mesmo tamanho da imagem original
-    mask_image = Image.fromarray(mask_array).convert("L")  # Converte a máscara para escala de cinza
-    mask_image = ImageOps.colorize(mask_image, black="black", white="white")  # Converte para RGB
-    mask_image = mask_image.convert("RGBA")  # Converte para RGBA, necessário para alpha_composite
-    
-    # Assegura que ambas as imagens tenham o mesmo tamanho
+    mask_image = Image.fromarray(mask_array).convert("L")  
+    mask_image = ImageOps.colorize(mask_image, black="black", white="white")  
+    mask_image = mask_image.convert("RGBA")
     mask_image = mask_image.resize(original_image.size)
+    mask_image.putalpha(int(alpha * 255))
 
-    # Define o canal alfa (transparência) com base no valor de `alpha`
-    mask_image.putalpha(int(alpha * 255))  # Define o nível de transparência para a máscara
-
-    # Combina a máscara sobre a imagem original
     combined_image = Image.alpha_composite(original_image, mask_image)
     return combined_image
+
 # Função para recortar tensores
 def crop_tensor(tensor, target_tensor):
     target_height, target_width = target_tensor.shape[2], target_tensor.shape[3]
@@ -47,22 +40,6 @@ def crop_tensor(tensor, target_tensor):
     crop_right = delta_width - crop_left
 
     return tensor[:, :, crop_top:tensor_height - crop_bottom, crop_left:tensor_width - crop_right]
-
-# Função para salvar a segmentação como PNG com ajuste de contraste
-def save_with_contrast_as_png(image_array, contrast_factor=2.0):
-    if image_array.max() <= 1:
-        image_array = (image_array * 255).astype(np.uint8)
-    else:
-        image_array = image_array.astype(np.uint8)
-    
-    image = Image.fromarray(image_array)
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(contrast_factor)
-    
-    output = BytesIO()
-    image.save(output, format='PNG')
-    output.seek(0)
-    return output
 
 # Função para carregar e aplicar o contraste no TIFF
 def load_and_apply_contrast(image_path, contrast_factor=2.0):
@@ -129,9 +106,9 @@ model.eval()
 
 # Função para transformar predição em máscara binária
 def predb_to_mask(predb, idx):
-    p = F.softmax(predb[idx], dim=0)  # Aplica softmax na saída
-    mask = p.argmax(0).cpu().numpy()  # Seleciona o canal com maior probabilidade (nuvem ou não-nuvem)
-    return (mask == 1).astype(np.uint8) * 255  # Converte para binário (255 para nuvem, 0 para o restante)
+    p = F.softmax(predb[idx], dim=0)
+    mask = p.argmax(0).cpu().numpy()
+    return (mask == 1).astype(np.uint8) * 255
 
 # Atualizando a função segment_image para a API
 def segment_image(image_path):
@@ -141,10 +118,10 @@ def segment_image(image_path):
     with torch.no_grad():
         predb = model(image_tensor)
 
-    output_image = predb_to_mask(predb, 0)  # Usa o primeiro índice da predição
+    output_image = predb_to_mask(predb, 0)
     return output_image
 
-# Rota para segmentar uma imagem e retornar PNG com contraste ajustado
+# Rota para segmentar uma imagem e retornar TIFF
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'files' not in request.files:
@@ -162,11 +139,11 @@ def predict():
     # Sobrepõe a máscara sobre a imagem original
     overlayed_image = overlay_mask_on_image(temp_file.name, segmented_result)
 
-    # Salva a imagem final em um buffer para enviar como resposta
+    # Salva a imagem final como TIFF em um buffer para enviar como resposta
     output = BytesIO()
-    overlayed_image.save(output, format='PNG')
+    overlayed_image.save(output, format='TIFF')
     output.seek(0)
-    return send_file(output, mimetype='image/png', as_attachment=True, download_name='overlayed_image.png')
+    return send_file(output, mimetype='image/tiff', as_attachment=True, download_name='overlayed_image.tiff')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
