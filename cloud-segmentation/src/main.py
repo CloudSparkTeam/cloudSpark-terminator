@@ -15,6 +15,12 @@ Image.MAX_IMAGE_PIXELS = None
 # Verifica se o modelo já está treinado e se o GPU está disponível
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Função para detectar áreas estouradas (branco saturado)
+def detect_overexposed_areas(image_array, threshold=240):
+    # Identifica os pixels acima do limiar (por exemplo, 240 para áreas muito brancas)
+    overexposed_mask = image_array > threshold
+    return overexposed_mask.astype(np.uint8) * 255  # Cria uma máscara binária
+
 # Função para sobrepor a máscara na imagem original
 def overlay_mask_on_image(original_path, mask_array, alpha=0.5):
     original_image = Image.open(original_path).convert("RGBA")
@@ -121,29 +127,100 @@ def segment_image(image_path):
     output_image = predb_to_mask(predb, 0)
     return output_image
 
-# Rota para segmentar uma imagem e retornar TIFF
-@app.route('/predict', methods=['POST'])
-def predict():
+@app.route('/tiff/segmented', methods=['POST'])
+def generate_segmented_tiff():
     if 'files' not in request.files:
         return jsonify({'error': 'No files part'}), 400
 
     files = request.files['files']
     if files.filename == '':
-        return jsonify({'error': 'No selected files'}), 400
+        return jsonify({'error': 'No selected file'}), 400
 
     # Salva o arquivo temporariamente
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         files.save(temp_file.name)
-        segmented_result = segment_image(temp_file.name)
+        segmented_mask = segment_image(temp_file.name)
 
-    # Sobrepõe a máscara sobre a imagem original
-    overlayed_image = overlay_mask_on_image(temp_file.name, segmented_result)
+    # Salva a máscara segmentada como TIFF
+    segmented_output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".tiff").name
+    Image.fromarray(segmented_mask).save(segmented_output_path, format='TIFF')
 
-    # Salva a imagem final como TIFF em um buffer para enviar como resposta
-    output = BytesIO()
-    overlayed_image.save(output, format='TIFF')
-    output.seek(0)
-    return send_file(output, mimetype='image/tiff', as_attachment=True, download_name='overlayed_image.tiff')
+    # Retorna o TIFF gerado
+    return send_file(segmented_output_path, mimetype='image/tiff', as_attachment=True, download_name='segmented_mask.tiff')
+
+@app.route('/tiff/overexposed', methods=['POST'])
+def generate_overexposed_tiff():
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files part'}), 400
+
+    files = request.files['files']
+    if files.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    # Salva o arquivo temporariamente
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        files.save(temp_file.name)
+
+        # Carregar a imagem original e processar a máscara
+        original_image = Image.open(temp_file.name)
+        overexposed_mask = detect_overexposed_areas(np.array(original_image), threshold=240)
+
+    # Salva a máscara de áreas estouradas como TIFF
+    overexposed_output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".tiff").name
+    Image.fromarray(overexposed_mask).save(overexposed_output_path, format='TIFF')
+
+    # Retorna o TIFF gerado
+    return send_file(overexposed_output_path, mimetype='image/tiff', as_attachment=True, download_name='overexposed_mask.tiff')
+
+@app.route('/thumbnail/segmented', methods=['POST'])
+def generate_segmented_thumbnail():
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files part'}), 400
+
+    files = request.files['files']
+    if files.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    # Salva o arquivo temporariamente
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        files.save(temp_file.name)
+        segmented_mask = segment_image(temp_file.name)
+
+    # Salva o thumbnail da máscara segmentada como PNG
+    segmented_thumbnail = BytesIO()
+    Image.fromarray(segmented_mask).save(segmented_thumbnail, format='PNG')
+    segmented_thumbnail.seek(0)
+
+    # Retorna o thumbnail gerado
+    return send_file(segmented_thumbnail, mimetype='image/png', as_attachment=True, download_name='segmented_thumbnail.png')
+
+
+@app.route('/thumbnail/overexposed', methods=['POST'])
+def generate_overexposed_thumbnail():
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files part'}), 400
+
+    files = request.files['files']
+    if files.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    # Salva o arquivo temporariamente
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        files.save(temp_file.name)
+
+        # Carregar a imagem original e processar a máscara
+        original_image = Image.open(temp_file.name)
+        overexposed_mask = detect_overexposed_areas(np.array(original_image), threshold=240)
+
+    # Salva o thumbnail da máscara de áreas estouradas como PNG
+    overexposed_thumbnail = BytesIO()
+    Image.fromarray(overexposed_mask).save(overexposed_thumbnail, format='PNG')
+    overexposed_thumbnail.seek(0)
+
+    # Retorna o thumbnail gerado
+    return send_file(overexposed_thumbnail, mimetype='image/png', as_attachment=True, download_name='overexposed_thumbnail.png')
+
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
